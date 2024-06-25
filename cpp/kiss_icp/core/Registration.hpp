@@ -28,7 +28,25 @@
 
 #include "VoxelHashMap.hpp"
 
+namespace Eigen {
+
+using Matrix6d = Eigen::Matrix<double, 6, 6>;
+using Matrix3_6d = Eigen::Matrix<double, 3, 6>;
+using Vector6d = Eigen::Matrix<double, 6, 1>;
+
+}  // namespace Eigen
+
 namespace kiss_icp {
+
+using Correspondences = std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>>;
+using LinearSystem = std::pair<Eigen::Matrix6d, Eigen::Vector6d>;
+
+Correspondences DataAssociation(const std::vector<Eigen::Vector3d> &points,
+                                const kiss_icp::VoxelHashMap &voxel_map,
+                                const double max_correspondance_distance);
+
+// Return [JTJ, JTr] - perturbation on the global (left) side
+LinearSystem BuildLinearSystem(const Correspondences &correspondences, const double kernel_scale);
 
 struct Registration {
     explicit Registration(int max_num_iteration, double convergence_criterion, int max_num_threads);

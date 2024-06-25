@@ -36,15 +36,6 @@
 
 #include "VoxelHashMap.hpp"
 
-namespace Eigen {
-using Matrix6d = Eigen::Matrix<double, 6, 6>;
-using Matrix3_6d = Eigen::Matrix<double, 3, 6>;
-using Vector6d = Eigen::Matrix<double, 6, 1>;
-}  // namespace Eigen
-
-using Correspondences = std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>>;
-using LinearSystem = std::pair<Eigen::Matrix6d, Eigen::Vector6d>;
-
 namespace {
 inline double square(double x) { return x * x; }
 
@@ -87,6 +78,9 @@ std::tuple<Eigen::Vector3d, double> GetClosestNeighbor(const Eigen::Vector3d &po
     });
     return std::make_tuple(closest_neighbor, closest_distance);
 }
+}  // namespace
+
+namespace kiss_icp {
 
 Correspondences DataAssociation(const std::vector<Eigen::Vector3d> &points,
                                 const kiss_icp::VoxelHashMap &voxel_map,
@@ -163,9 +157,6 @@ LinearSystem BuildLinearSystem(const Correspondences &correspondences, const dou
 
     return {JTJ, JTr};
 }
-}  // namespace
-
-namespace kiss_icp {
 
 Registration::Registration(int max_num_iteration, double convergence_criterion, int max_num_threads)
     : max_num_iterations_(max_num_iteration),
