@@ -64,10 +64,12 @@ std::vector<Eigen::Vector3d> Preprocess(const std::vector<Eigen::Vector3d> &fram
                                         double max_range,
                                         double min_range) {
     std::vector<Eigen::Vector3d> inliers;
+    inliers.reserve(frame.size());
     std::copy_if(frame.cbegin(), frame.cend(), std::back_inserter(inliers), [&](const auto &pt) {
         const double norm = pt.norm();
         return norm < max_range && norm > min_range;
     });
+    inliers.shrink_to_fit();
     return inliers;
 }
 
