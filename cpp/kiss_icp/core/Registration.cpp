@@ -43,6 +43,9 @@ void TransformPoints(const Sophus::SE3d &T, std::vector<Eigen::Vector3d> &points
     std::transform(points.cbegin(), points.cend(), points.begin(),
                    [&](const auto &point) { return T * point; });
 }
+}  // namespace
+
+namespace kiss_icp {
 
 using Voxel = kiss_icp::VoxelHashMap::Voxel;
 std::vector<Voxel> GetAdjacentVoxels(const Voxel &voxel, int adjacent_voxels = 1) {
@@ -78,9 +81,6 @@ std::tuple<Eigen::Vector3d, double> GetClosestNeighbor(const Eigen::Vector3d &po
     });
     return std::make_tuple(closest_neighbor, closest_distance);
 }
-}  // namespace
-
-namespace kiss_icp {
 
 Correspondences DataAssociation(const std::vector<Eigen::Vector3d> &points,
                                 const kiss_icp::VoxelHashMap &voxel_map,

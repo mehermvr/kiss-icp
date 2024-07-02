@@ -41,6 +41,9 @@ namespace kiss_icp {
 using Correspondences = std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>>;
 using LinearSystem = std::pair<Eigen::Matrix6d, Eigen::Vector6d>;
 
+std::tuple<Eigen::Vector3d, double> GetClosestNeighbor(const Eigen::Vector3d &point,
+                                                       const kiss_icp::VoxelHashMap &voxel_map);
+
 Correspondences DataAssociation(const std::vector<Eigen::Vector3d> &points,
                                 const kiss_icp::VoxelHashMap &voxel_map,
                                 const double max_correspondance_distance);
