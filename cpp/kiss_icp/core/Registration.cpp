@@ -50,12 +50,13 @@ using LinearSystem = std::pair<Eigen::Matrix6d, Eigen::Vector6d>;
 namespace {
 inline double square(double x) { return x * x; }
 
-void TransformPoints(const Sophus::SE3d &T, std::vector<Eigen::Vector3d> &points) {
-    std::transform(points.cbegin(), points.cend(), points.begin(),
-                   [&](const auto &point) { return T * point; });
-}
+// void TransformPoints(const Sophus::SE3d &T, std::vector<Eigen::Vector3d> &points) {
+//     std::transform(points.cbegin(), points.cend(), points.begin(),
+//                    [&](const auto &point) { return T * point; });
+// }
 
 Correspondences DataAssociation(const std::vector<Eigen::Vector3d> &points,
+                                const Sophus::SE3d &pose,
                                 const kiss_icp::VoxelHashMap &voxel_map,
                                 const double max_correspondance_distance) {
     using points_iterator = std::vector<Eigen::Vector3d>::const_iterator;
@@ -70,7 +71,10 @@ Correspondences DataAssociation(const std::vector<Eigen::Vector3d> &points,
         [&](const tbb::blocked_range<points_iterator> &r, Correspondences res) -> Correspondences {
             res.reserve(r.size());
             std::for_each(r.begin(), r.end(), [&](const auto &point) {
-                const auto &[closest_neighbor, distance] = voxel_map.GetClosestNeighbor(point);
+                // transform the source point here to get the map corresponding point. should be the
+                // same as pre-transforming points with TransformPoints with a pose
+                const auto &[closest_neighbor, distance] =
+                    voxel_map.GetClosestNeighbor(pose * point);
                 if (distance < max_correspondance_distance) {
                     res.emplace_back(point, closest_neighbor);
                 }
@@ -88,13 +92,16 @@ Correspondences DataAssociation(const std::vector<Eigen::Vector3d> &points,
     return correspondences;
 }
 
-LinearSystem BuildLinearSystem(const Correspondences &correspondences, const double kernel_scale) {
-    auto compute_jacobian_and_residual = [](const auto &correspondence) {
+LinearSystem BuildLinearSystem(const Sophus::SE3d &current_pose,
+                               const Correspondences &correspondences,
+                               const double kernel_scale) {
+    auto compute_jacobian_and_residual = [&](const auto &correspondence) {
         const auto &[source, target] = correspondence;
-        const Eigen::Vector3d residual = source - target;
+        const Eigen::Vector3d residual = current_pose * source - target;
+        // right jacobian
         Eigen::Matrix3_6d J_r;
-        J_r.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity();
-        J_r.block<3, 3>(0, 3) = -1.0 * Sophus::SO3d::hat(source);
+        J_r.block<3, 3>(0, 0) = current_pose.rotationMatrix();
+        J_r.block<3, 3>(0, 3) = -1.0 * current_pose.rotationMatrix() * Sophus::SO3d::hat(source);
         return std::make_tuple(J_r, residual);
     };
 
@@ -154,27 +161,29 @@ Sophus::SE3d Registration::AlignPointsToMap(const std::vector<Eigen::Vector3d> &
     if (voxel_map.Empty()) return initial_guess;
 
     // Equation (9)
-    std::vector<Eigen::Vector3d> source = frame;
-    TransformPoints(initial_guess, source);
+    // for the right jacobian, we need the original untransformed point after data association, so
+    // cant simplify that compute
+    //
+    // std::vector<Eigen::Vector3d> source = frame;
+    // TransformPoints(initial_guess, source);
 
     // ICP-loop
-    Sophus::SE3d T_icp = Sophus::SE3d();
+    Sophus::SE3d estimated_pose = initial_guess;
     for (int j = 0; j < max_num_iterations_; ++j) {
         // Equation (10)
-        const auto correspondences = DataAssociation(source, voxel_map, max_distance);
+        const auto correspondences =
+            DataAssociation(frame, estimated_pose, voxel_map, max_distance);
         // Equation (11)
-        const auto &[JTJ, JTr] = BuildLinearSystem(correspondences, kernel_scale);
+        const auto &[JTJ, JTr] = BuildLinearSystem(estimated_pose, correspondences, kernel_scale);
         const Eigen::Vector6d dx = JTJ.ldlt().solve(-JTr);
         const Sophus::SE3d estimation = Sophus::SE3d::exp(dx);
-        // Equation (12)
-        TransformPoints(estimation, source);
         // Update iterations
-        T_icp = estimation * T_icp;
+        estimated_pose = estimated_pose * estimation;
         // Termination criteria
         if (dx.norm() < convergence_criterion_) break;
     }
     // Spit the final transformation
-    return T_icp * initial_guess;
+    return estimated_pose;
 }
 
 }  // namespace kiss_icp
